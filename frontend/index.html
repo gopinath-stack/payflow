@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PayFlow</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 860px; margin: 24px auto; padding: 0 16px; background: #f5f7fa; color: #1c2430; }
+    h1 { margin-bottom: 4px; } .sub { color: #5b6573; margin-top: 0; }
+    section { background: #fff; border-radius: 10px; padding: 16px; margin: 16px 0; box-shadow: 0 1px 3px #0001; }
+    input, button { padding: 8px; margin: 4px 4px 4px 0; border: 1px solid #ccd3dd; border-radius: 6px; }
+    button { background: #1f6feb; color: #fff; border: none; cursor: pointer; }
+    table { width: 100%; border-collapse: collapse; } td, th { text-align: left; padding: 6px; border-bottom: 1px solid #eef1f5; }
+    .ok { color: #1a7f37; } .err { color: #cf222e; }
+  </style>
+</head>
+<body>
+  <h1>PayFlow</h1>
+  <p class="sub">Digital payments demo</p>
+
+  <section>
+    <h3>Open account</h3>
+    <input id="owner" placeholder="Owner name">
+    <input id="balance" type="number" placeholder="Initial balance">
+    <button onclick="createAccount()">Create</button>
+  </section>
+
+  <section>
+    <h3>Send money</h3>
+    <input id="from" type="number" placeholder="From account ID">
+    <input id="to" type="number" placeholder="To account ID">
+    <input id="amount" type="number" placeholder="Amount">
+    <button onclick="sendMoney()">Pay</button>
+    <div id="msg"></div>
+  </section>
+
+  <section><h3>Accounts</h3><table id="accounts"></table></section>
+  <section><h3>Recent payments</h3><table id="payments"></table></section>
+
+  <script src="config.js"></script>
+  <script>
+    const { ACCOUNTS_URL, PAYMENTS_URL } = window.PAYFLOW_CONFIG;
+    const msg = (t, ok) => { const m = document.getElementById("msg"); m.textContent = t; m.className = ok ? "ok" : "err"; };
+
+    async function api(url, opts = {}) {
+      const r = await fetch(url, { headers: { "Content-Type": "application/json" }, ...opts });
+      const body = await r.json();
+      if (!r.ok) throw new Error(body.detail || r.status);
+      return body;
+    }
+
+    async function refresh() {
+      try {
+        const accs = await api(`${ACCOUNTS_URL}/accounts`);
+        document.getElementById("accounts").innerHTML = "<tr><th>ID</th><th>Owner</th><th>Balance</th></tr>" +
+          accs.map(a => `<tr><td>${a.id}</td><td>${a.owner}</td><td>₹${a.balance.toFixed(2)}</td></tr>`).join("");
+        const pays = await api(`${PAYMENTS_URL}/payments`);
+        document.getElementById("payments").innerHTML = "<tr><th>ID</th><th>From</th><th>To</th><th>Amount</th><th>Status</th></tr>" +
+          pays.map(p => `<tr><td>${p.id}</td><td>${p.from_account}</td><td>${p.to_account}</td><td>₹${p.amount.toFixed(2)}</td><td>${p.status}</td></tr>`).join("");
+      } catch (e) { msg("Backend not reachable: " + e.message, false); }
+    }
+
+    async function createAccount() {
+      try {
+        await api(`${ACCOUNTS_URL}/accounts`, { method: "POST", body: JSON.stringify({
+          owner: document.getElementById("owner").value,
+          initial_balance: Number(document.getElementById("balance").value || 0) }) });
+        msg("Account created", true); refresh();
+      } catch (e) { msg(e.message, false); }
+    }
+
+    async function sendMoney() {
+      try {
+        await api(`${PAYMENTS_URL}/payments`, { method: "POST", body: JSON.stringify({
+          from_account: Number(document.getElementById("from").value),
+          to_account: Number(document.getElementById("to").value),
+          amount: Number(document.getElementById("amount").value) }) });
+        msg("Payment completed", true); refresh();
+      } catch (e) { msg("Payment failed: " + e.message, false); }
+    }
+
+    refresh();
+  </script>
+</body>
+</html>
